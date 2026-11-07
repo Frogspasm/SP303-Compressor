@@ -1,4 +1,4 @@
-import { processSP303, DEFAULT_PARAMS } from './sp303-dsp.js';
+import { processSP303, DEFAULT_PARAMS, limitChannels } from './sp303-dsp.js';
 import { encodeWav16 } from './wav.js';
 import { resampleChannels, SUPPORTED_RATES, EXPORT_RATES } from './resample.js';
 
@@ -65,7 +65,8 @@ function fillRateMenus() {
 function outputAudio() {
   const rate = parseInt(els.exportRate.value, 10);
   if (!outputCache || outputCache.rate !== rate || outputCache.src !== processed) {
-    const channels = resampleChannels(processed.channels, processed.sampleRate, rate);
+    // Resampling can overshoot full scale slightly (ringing), so limit after it.
+    const channels = limitChannels(resampleChannels(processed.channels, processed.sampleRate, rate));
     outputCache = { rate, src: processed, channels };
   }
   return { channels: outputCache.channels, rate };

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { processSP303, DEFAULT_PARAMS } from '../src/sp303-dsp.js';
+import { processSP303, DEFAULT_PARAMS, limitChannels } from '../src/sp303-dsp.js';
 import { encodeWav16, decodeWav16 } from '../src/wav.js';
 
 const SR = 48000;
@@ -172,4 +172,24 @@ test('output limiter leaves quiet signal unchanged', () => {
   const a = processSP303([x], SR, { compress: 0, noise: 0, volume: 1 })[0];
   // limiter is a no-op below its knee, so the output must not exceed the knee
   assert.ok(peak(a) < 0.8, `quiet output should sit below the limiter knee, got ${peak(a)}`);
+});
+
+test('every supported rate gives finite output (no filter instability at low rates)', async () => {
+  const { SUPPORTED_RATES } = await import('../src/resample.js');
+  for (const rate of SUPPORTED_RATES) {
+    const x = new Float32Array(Math.round(rate * 0.5));
+    for (let i = 0; i < x.length; i++) x[i] = 0.5 * Math.sin((2 * Math.PI * 300 * i) / rate);
+    const [y] = processSP303([x], rate, { compress: 1, noise: 1, transient: 1 });
+    let bad = 0, pk = 0;
+    for (const v of y) { if (!Number.isFinite(v)) bad++; else pk = Math.max(pk, Math.abs(v)); }
+    assert.equal(bad, 0, `${rate} Hz produced ${bad} non-finite samples`);
+    assert.ok(pk > 0.05, `${rate} Hz output is silent (peak ${pk})`);
+  }
+});
+
+test('limitChannels keeps overshoot from resampling inside full scale', () => {
+  const x = Float64Array.from([0, 0.5, 1.03, -1.02, 0.2]);
+  const [y] = limitChannels([x]);
+  for (const v of y) assert.ok(Math.abs(v) <= 1, `sample ${v} exceeds full scale`);
+  assert.equal(y[1], 0.5); // below the knee, unchanged
 });

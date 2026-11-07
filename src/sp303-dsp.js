@@ -42,7 +42,16 @@ function makeRng(seed) {
 
 // ---------- RBJ biquad filters ----------
 
-function biquadCoeffs(type, f0, sampleRate, q, gainDb = 0) {
+// Keep filter frequencies safely below Nyquist. A corner at or above
+// Nyquist makes the biquad unstable, which produced NaNs at low sample rates.
+const MAX_CORNER_RATIO = 0.45;
+
+function safeCorner(f0, sampleRate) {
+  return Math.min(f0, MAX_CORNER_RATIO * sampleRate);
+}
+
+function biquadCoeffs(type, f0Requested, sampleRate, q, gainDb = 0) {
+  const f0 = safeCorner(f0Requested, sampleRate);
   const w0 = (2 * Math.PI * f0) / sampleRate;
   const cos = Math.cos(w0);
   const sin = Math.sin(w0);
@@ -188,7 +197,7 @@ function addVinylNoise(x, sampleRate, noiseAmt, rng) {
   const pClick = clicksPerSec / sampleRate;
 
   // hiss: one-pole low-pass on white noise
-  const a = Math.exp((-2 * Math.PI * 6000) / sampleRate);
+  const a = Math.exp((-2 * Math.PI * safeCorner(6000, sampleRate)) / sampleRate);
   let hiss = 0;
 
   let clickEnv = 0;
@@ -220,6 +229,12 @@ function softLimitSample(v) {
 function softLimit(x) {
   for (let i = 0; i < x.length; i++) x[i] = softLimitSample(x[i]);
   return x;
+}
+
+/** Soft-limit channels in place so no sample exceeds +/-1. Used after resampling, which can overshoot. */
+export function limitChannels(channels) {
+  for (const c of channels) softLimit(c);
+  return channels;
 }
 
 // ---------- public API ----------
