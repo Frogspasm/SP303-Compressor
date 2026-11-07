@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multi-Trak · Vinyl Sim</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #161614; --fg: #ecebe6; --muted: #9a998f; --card: #22221f; --accent: #fb923c; --line: #3a3a35;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 1.4rem; margin: 0 0 4px; }
+    p.sub { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .drop { display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 24px; text-align: center; color: var(--muted); cursor: pointer; }
+    .drop.over { border-color: var(--accent); color: var(--fg); }
+    .drop input { display: none; }
+    .row { display: grid; grid-template-columns: 110px 1fr 48px; align-items: center; gap: 12px; margin: 10px 0; }
+    .row output { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+    button { font: inherit; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #161614; font-weight: 600; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #status { color: var(--muted); font-size: 0.9rem; min-height: 1.4em; }
+    .note { color: var(--muted); font-size: 0.85rem; }
+    @media (max-width: 480px) { .row { grid-template-columns: 90px 1fr 44px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Vinyl Sim</h1>
+    <p class="sub">Approximate SP-303-style processing for your own audio. Runs entirely in your browser.</p>
+
+    <div class="card">
+      <label class="drop" id="drop">
+        Drop a WAV or audio file here, or click to choose one
+        <input type="file" id="file" accept="audio/*,.wav,.aif,.aiff">
+      </label>
+      <div id="status" role="status"></div>
+    </div>
+
+    <div class="card">
+      <div class="row"><label for="volume">Volume</label><input type="range" id="volume" min="0" max="1" step="0.01" value="1"><output for="volume"></output></div>
+      <div class="row"><label for="compress">Compress</label><input type="range" id="compress" min="0" max="1" step="0.01" value="0.5"><output for="compress"></output></div>
+      <div class="row"><label for="noise">Noise</label><input type="range" id="noise" min="0" max="1" step="0.01" value="0.5"><output for="noise"></output></div>
+      <p class="note">Volume sets input level, Compress sets how hard the compressor works, and Noise sets the vinyl crackle and hiss.</p>
+    </div>
+
+    <div class="card">
+      <div class="buttons">
+        <button id="play-original" disabled>Play original</button>
+        <button id="play-processed" class="primary" disabled>Play processed</button>
+        <button id="stop">Stop</button>
+        <button id="download" disabled>Download processed WAV</button>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
