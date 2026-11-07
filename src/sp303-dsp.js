@@ -6,10 +6,18 @@
 //
 // Chain: input gain -> tone shaping (EQ) -> feed-forward compressor
 //        -> soft saturation -> vinyl noise (crackle + hiss) -> output clamp.
+//
+// Compressor behaviour (both unverified against hardware; see README):
+//  - Transient preservation: the gain's attack is slowed by the Transient
+//    control, so the first few milliseconds of a hit pass through before the
+//    squash takes hold.
+//  - Program-dependent release: the release lengthens when the compressor has
+//    been working hard on average, and stays near the base time for brief hits.
 
 export const DEFAULT_PARAMS = Object.freeze({
   volume: 1.0,   // 0..1  input level (maps to -40..0 dB)
   compress: 0.5, // 0..1  compressor depth (threshold and makeup gain)
+  transient: 0.5, // 0..1 how much of each hit's attack passes through the compressor
   noise: 0.5,    // 0..1  vinyl crackle + hiss level
   seed: 1,       // integer seed so the noise is repeatable
 });
@@ -93,41 +101,68 @@ function toneShape(x, sampleRate) {
 
 const COMP = { ratio: 8, kneeDb: 6, attackMs: 1, releaseMs: 120 };
 
-function compressorGainCurve(env, params) {
-  // env is a per-sample level (linear); returns gain in linear units
+// Gain reduction in dB (>= 0) for a detector level, with a soft knee.
+function grDb(env, params) {
   const { thresholdDb, ratio, kneeDb } = params;
-  const xdb = linToDb(env);
-  const over = xdb - thresholdDb;
-  let gr; // gain reduction in dB (>= 0)
-  if (over <= -kneeDb / 2) {
-    gr = 0;
-  } else if (over >= kneeDb / 2) {
-    gr = over * (1 - 1 / ratio);
-  } else {
-    const t = over + kneeDb / 2;
-    gr = (t * t) / (2 * kneeDb) * (1 - 1 / ratio);
-  }
-  return dbToLin(-gr);
+  const over = linToDb(env) - thresholdDb;
+  if (over <= -kneeDb / 2) return 0;
+  if (over >= kneeDb / 2) return over * (1 - 1 / ratio);
+  const t = over + kneeDb / 2;
+  return (t * t) / (2 * kneeDb) * (1 - 1 / ratio);
 }
 
-function compress(channels, sampleRate, compressAmt) {
+const COMP_DYN = {
+  gainAttackMsMin: 0.2,   // transient = 0: near-instant gain attack
+  gainAttackMsMax: 15,    // transient = 1: hits keep their first few ms
+  grAvgMs: 300,           // how far back "program density" looks
+  grAvgRef: 12,           // average GR (dB) that counts as dense material
+  releaseScaleMax: 3,     // release is up to 3x longer on dense material
+};
+
+function compress(channels, sampleRate, compressAmt, transientAmt) {
   const n = channels[0].length;
   // compress 0..1 -> threshold -30..-6 dB, makeup 0..8 dB
   const thresholdDb = -30 + 24 * compressAmt;
   const makeup = dbToLin(8 * compressAmt);
+  const curve = { thresholdDb, ratio: COMP.ratio, kneeDb: COMP.kneeDb };
+
+  // detector: fast peak follower
   const aA = Math.exp(-1 / ((COMP.attackMs / 1000) * sampleRate));
   const aR = Math.exp(-1 / ((COMP.releaseMs / 1000) * sampleRate));
-  const curve = { thresholdDb, ratio: COMP.ratio, kneeDb: COMP.kneeDb };
+  // gain smoothing: attack set by transient amount
+  const gainAttackMs = COMP_DYN.gainAttackMsMin +
+    (COMP_DYN.gainAttackMsMax - COMP_DYN.gainAttackMsMin) * transientAmt;
+  const aGA = Math.exp(-1 / ((gainAttackMs / 1000) * sampleRate));
+  // slow average of gain reduction, used to make release program-dependent
+  const aGrAvg = Math.exp(-1 / ((COMP_DYN.grAvgMs / 1000) * sampleRate));
 
   const out = channels.map((c) => new Float64Array(c.length));
   let env = 0;
+  let gainDb = 0;   // smoothed gain (dB, <= 0)
+  let grAvg = 0;    // smoothed gain reduction (dB, >= 0)
   for (let i = 0; i < n; i++) {
     let peak = 0;
     for (const c of channels) peak = Math.max(peak, Math.abs(c[i]));
     const coef = peak > env ? aA : aR;
     env = coef * env + (1 - coef) * peak;
-    const g = compressorGainCurve(env, curve) * makeup;
-    for (let ch = 0; ch < channels.length; ch++) out[ch][i] = channels[ch][i] * g;
+
+    const gr = grDb(env, curve);
+    const target = -gr;
+    grAvg = aGrAvg * grAvg + (1 - aGrAvg) * gr;
+
+    let g;
+    if (target < gainDb) {
+      g = aGA;   // gain is falling: attack
+    } else {
+      // gain is recovering: release, longer on dense material
+      const density = Math.min(1, grAvg / COMP_DYN.grAvgRef);
+      const relMs = COMP.releaseMs * (1 + (COMP_DYN.releaseScaleMax - 1) * density);
+      g = Math.exp(-1 / ((relMs / 1000) * sampleRate));
+    }
+    gainDb = g * gainDb + (1 - g) * target;
+
+    const lin = dbToLin(gainDb) * makeup;
+    for (let ch = 0; ch < channels.length; ch++) out[ch][i] = channels[ch][i] * lin;
   }
   return out;
 }
@@ -177,6 +212,7 @@ export function processSP303(channels, sampleRate, params = {}) {
   const p = { ...DEFAULT_PARAMS, ...params };
   const volume = clamp01(p.volume);
   const compressAmt = clamp01(p.compress);
+  const transientAmt = clamp01(p.transient);
   const noiseAmt = clamp01(p.noise);
   const inGain = dbToLin(-40 + 40 * volume);
 
@@ -187,7 +223,7 @@ export function processSP303(channels, sampleRate, params = {}) {
     return toneShape(scaled, sampleRate);
   });
 
-  const compressed = compress(shaped, sampleRate, compressAmt);
+  const compressed = compress(shaped, sampleRate, compressAmt, transientAmt);
 
   const rng = makeRng(p.seed);
   return compressed.map((c) => {

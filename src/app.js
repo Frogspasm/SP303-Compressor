@@ -5,7 +5,7 @@ import { resampleChannels, SUPPORTED_RATES, EXPORT_RATES } from './resample.js';
 const $ = (id) => document.getElementById(id);
 const els = {
   file: $('file'), drop: $('drop'), status: $('status'),
-  volume: $('volume'), compress: $('compress'), noise: $('noise'),
+  volume: $('volume'), compress: $('compress'), noise: $('noise'), transient: $('transient'),
   playOriginal: $('play-original'), playProcessed: $('play-processed'),
   stop: $('stop'), download: $('download'),
   workRate: $('work-rate'), exportRate: $('export-rate'),
@@ -26,13 +26,14 @@ function readParams() {
   return {
     volume: parseFloat(els.volume.value),
     compress: parseFloat(els.compress.value),
+    transient: parseFloat(els.transient.value),
     noise: parseFloat(els.noise.value),
     seed: DEFAULT_PARAMS.seed,
   };
 }
 
 function updateOutputs() {
-  for (const k of ['volume', 'compress', 'noise']) {
+  for (const k of ['volume', 'compress', 'noise', 'transient']) {
     els[k].nextElementSibling.textContent = fmtPct(parseFloat(els[k].value));
   }
 }
@@ -160,7 +161,7 @@ els.drop.addEventListener('drop', (e) => {
   if (f) loadFile(f);
 });
 
-for (const k of ['volume', 'compress', 'noise']) {
+for (const k of ['volume', 'compress', 'noise', 'transient']) {
   els[k].addEventListener('input', updateOutputs);
   els[k].addEventListener('change', runProcess);
 }

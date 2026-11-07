@@ -106,3 +106,48 @@ test('WAV encode/decode round-trips within 16-bit precision', () => {
     assert.ok(Math.abs(decoded.channels[1][i] - right[i]) <= tol);
   }
 });
+
+test('transient control lets a hit\'s attack through for longer', () => {
+  // Silence, then a loud tone that starts abruptly.
+  const sr = SR;
+  const hit = new Float32Array(sr / 10 + sr * 0.4);
+  for (let i = sr / 10; i < hit.length; i++) hit[i] = 0.3 * Math.sin((2 * Math.PI * 1000 * (i - sr / 10)) / sr);
+  const onsetPeak = (t) => {
+    const y = processSP303([hit], sr, { compress: 0.5, noise: 0, transient: t })[0];
+    const start = sr / 10 + Math.round(0.004 * sr);  // 4 ms after onset
+    const end = sr / 10 + Math.round(0.012 * sr);    // 12 ms after onset
+    return peak(y.subarray(start, end));
+  };
+  const short = onsetPeak(0);
+  const long = onsetPeak(1);
+  assert.ok(long > short * 1.3, `transient=1 peak ${long.toFixed(3)} should exceed transient=0 peak ${short.toFixed(3)} by 30%`);
+});
+
+test('release is longer after sustained compression than after a brief hit', () => {
+  const sr = SR;
+  const tone = (f, secs, amp) => {
+    const x = new Float32Array(Math.round(sr * secs));
+    for (let i = 0; i < x.length; i++) x[i] = amp * Math.sin((2 * Math.PI * f * i) / sr);
+    return x;
+  };
+  const cat = (...parts) => {
+    const n = parts.reduce((s, x) => s + x.length, 0);
+    const out = new Float32Array(n);
+    let p = 0;
+    for (const x of parts) { out.set(x, p); p += x.length; }
+    return out;
+  };
+  const tail = tone(300, 0.4, 0.1);
+  const dense = cat(tone(200, 1.0, 0.9), tail);                                  // 1 s of loud material
+  const brief = cat(tone(200, 0.05, 0.9), new Float32Array(Math.round(sr * 0.95)), tail); // 50 ms hit
+
+  const tailRms = (sig) => {
+    const y = processSP303([sig], sr, { compress: 1, noise: 0, transient: 0.5 })[0];
+    const a = Math.round(sr * 1.0) + Math.round(sr * 0.1);  // 100 ms into the tail
+    const b = Math.round(sr * 1.0) + Math.round(sr * 0.3);
+    return rms(y.subarray(a, b));
+  };
+  const rDense = tailRms(dense);
+  const rBrief = tailRms(brief);
+  assert.ok(rDense < rBrief * 0.92, `dense tail ${rDense.toFixed(4)} should recover more slowly than brief ${rBrief.toFixed(4)}`);
+});
