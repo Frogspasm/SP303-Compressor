@@ -60,11 +60,16 @@
         <button id="download" disabled>Download processed WAV</button>
       </div>
       <div class="row">
-        <label for="sample-rate">Sample rate</label>
-        <select id="sample-rate"></select>
+        <label for="work-rate">Working rate</label>
+        <select id="work-rate"></select>
         <span></span>
       </div>
-      <p class="note">Sets the rate used for playback of the processed sound and for the download. Lower rates lose content above half the rate.</p>
+      <div class="row">
+        <label for="export-rate">Export rate</label>
+        <select id="export-rate"></select>
+        <span></span>
+      </div>
+      <p class="note">Working rate: the sample is resampled to this rate before processing, so it sets the bandwidth the effect works on. Export rate: playback and download are resampled to this rate, which is 44.1 or 48 kHz.</p>
     </div>
   </main>
   <script type="module" src="./src/app.js"></script>

@@ -1,17 +1,18 @@
 import { processSP303, DEFAULT_PARAMS } from './sp303-dsp.js';
 import { encodeWav16 } from './wav.js';
-import { resampleChannels, SUPPORTED_RATES } from './resample.js';
+import { resampleChannels, SUPPORTED_RATES, EXPORT_RATES } from './resample.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
   file: $('file'), drop: $('drop'), status: $('status'),
   volume: $('volume'), compress: $('compress'), noise: $('noise'),
   playOriginal: $('play-original'), playProcessed: $('play-processed'),
-  stop: $('stop'), download: $('download'), rate: $('sample-rate'),
+  stop: $('stop'), download: $('download'),
+  workRate: $('work-rate'), exportRate: $('export-rate'),
 };
 
-// Resampled copy of the processed audio, cached per rate until the next process run.
-let outputCache = null; // { rate, channels }
+// Playback/export copy of the processed audio, cached until the processing or export rate changes.
+let outputCache = null; // { rate, src, channels }
 
 let ctx = null;
 let source = null;      // AudioBuffer of the loaded file
@@ -44,23 +45,24 @@ function setReady(ready) {
   els.download.disabled = !ready;
 }
 
-function fillRateMenu() {
-  for (const r of SUPPORTED_RATES) {
+function fillSelect(el, rates, defaultRate) {
+  for (const r of rates) {
     const opt = document.createElement('option');
     opt.value = String(r);
     opt.textContent = `${r / 1000} kHz`;
-    if (r === 44100) opt.selected = true;
-    els.rate.appendChild(opt);
+    if (r === defaultRate) opt.selected = true;
+    el.appendChild(opt);
   }
 }
 
-function selectedRate() {
-  return parseInt(els.rate.value, 10);
+function fillRateMenus() {
+  fillSelect(els.workRate, SUPPORTED_RATES, 44100);
+  fillSelect(els.exportRate, EXPORT_RATES, 44100);
 }
 
-// Processed audio at the chosen sample rate (what you hear and what you export).
+// Processed audio at the export rate (what you hear and what you download).
 function outputAudio() {
-  const rate = selectedRate();
+  const rate = parseInt(els.exportRate.value, 10);
   if (!outputCache || outputCache.rate !== rate || outputCache.src !== processed) {
     const channels = resampleChannels(processed.channels, processed.sampleRate, rate);
     outputCache = { rate, src: processed, channels };
@@ -70,11 +72,13 @@ function outputAudio() {
 
 function runProcess() {
   if (!source) return;
+  const workRate = parseInt(els.workRate.value, 10);
   const channels = [];
   for (let c = 0; c < source.numberOfChannels; c++) channels.push(source.getChannelData(c));
   const t0 = performance.now();
-  const out = processSP303(channels, source.sampleRate, readParams());
-  processed = { channels: out, sampleRate: source.sampleRate };
+  const working = resampleChannels(channels, source.sampleRate, workRate);
+  const out = processSP303(working, workRate, readParams());
+  processed = { channels: out, sampleRate: workRate };
   const ms = Math.round(performance.now() - t0);
   setStatus(`${fileName}: processed in ${ms} ms`);
 }
@@ -172,9 +176,9 @@ els.playProcessed.addEventListener('click', () => {
   const { channels, rate } = outputAudio();
   playBuffer(channels, rate);
 });
-els.rate.addEventListener('change', () => { if (processed) outputAudio(); });
+els.workRate.addEventListener('change', runProcess);
 els.stop.addEventListener('click', stopPlayback);
 els.download.addEventListener('click', download);
 
-fillRateMenu();
+fillRateMenus();
 updateOutputs();

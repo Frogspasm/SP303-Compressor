@@ -29,7 +29,7 @@ Audio stays in your browser. Nothing is uploaded.
 
 - `src/sp303-dsp.js`: the processing chain (`processSP303`), with no browser dependencies.
 - `src/wav.js`: 16-bit WAV encoder, plus a decoder used by the tests.
-- `src/resample.js`: band-limited (windowed-sinc) resampling between any pair of rates. `SUPPORTED_RATES` lists 8, 11.025, 16, 22.05, 24, 32, 44.1 and 48 kHz. The app's "Sample rate" menu offers all of them; `EXPORT_RATES` (44.1 and 48 kHz) is a separate list for the common delivery rates.
+- `src/resample.js`: band-limited (windowed-sinc) resampling between any pair of rates. `SUPPORTED_RATES` lists 8, 11.025, 16, 22.05, 24, 32, 44.1 and 48 kHz. The app's "Working rate" menu offers all of them. `EXPORT_RATES` (44.1 and 48 kHz) is the list for the "Export rate" menu.
 - `src/app.js`, `index.html`: the browser UI.
 - `test/sp303-dsp.test.js`: unit tests for the DSP and WAV code.
 
@@ -53,4 +53,5 @@ npm test
 - The tone curve matches the measured 1–4 kHz hump and the top-end rolloff, but the 4–10 kHz band is about 2–3 dB brighter than measured. Tuning is in `src/sp303-dsp.js`.
 - The compressor's threshold, ratio, and timing are chosen by hand. They are not derived from hardware measurements.
 - No dry (unprocessed) reference recordings have been compared sample by sample, so the chain has not been checked against the hardware.
-- The "Sample rate" menu sets the rate for both "Play processed" and the download. Audio is resampled from the browser's rate (usually 44.1 or 48 kHz). Processing itself runs at the browser's rate.
+- **Working rate** (any supported rate): the sample is resampled to this rate before processing, so the effect works at that bandwidth.
+- **Export rate** (44.1 or 48 kHz): the processed audio is resampled to this rate for "Play processed" and the download.
