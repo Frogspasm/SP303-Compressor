@@ -1,5 +1,6 @@
 import { processSP303, DEFAULT_PARAMS } from './sp303-dsp.js';
 import { encodeWav16 } from './wav.js';
+import { resampleChannels } from './resample.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -96,13 +97,15 @@ async function loadFile(file) {
 
 function download() {
   if (!processed) return;
-  const wav = encodeWav16(processed.channels, processed.sampleRate);
+  const exportRate = parseInt($('export-rate').value, 10);
+  const channels = resampleChannels(processed.channels, processed.sampleRate, exportRate);
+  const wav = encodeWav16(channels, exportRate);
   const blob = new Blob([wav], { type: 'audio/wav' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const base = fileName.replace(/\.[^.]+$/, '');
   a.href = url;
-  a.download = `${base}-vinylsim.wav`;
+  a.download = `${base}-vinylsim-${exportRate / 1000}k.wav`;
   document.body.appendChild(a);
   a.click();
   a.remove();

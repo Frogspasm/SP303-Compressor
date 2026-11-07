@@ -22,6 +22,7 @@
     .row { display: grid; grid-template-columns: 110px 1fr 48px; align-items: center; gap: 12px; margin: 10px 0; }
     .row output { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
     input[type="range"] { width: 100%; accent-color: var(--accent); }
+    select { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); justify-self: start; }
     .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
     button { font: inherit; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
     button.primary { background: var(--accent); border-color: var(--accent); color: #161614; font-weight: 600; }
@@ -57,6 +58,14 @@
         <button id="play-processed" class="primary" disabled>Play processed</button>
         <button id="stop">Stop</button>
         <button id="download" disabled>Download processed WAV</button>
+      </div>
+      <div class="row">
+        <label for="export-rate">Export rate</label>
+        <select id="export-rate">
+          <option value="44100" selected>44.1 kHz</option>
+          <option value="48000">48 kHz</option>
+        </select>
+        <span></span>
       </div>
     </div>
   </main>
