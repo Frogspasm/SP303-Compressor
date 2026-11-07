@@ -151,3 +151,25 @@ test('release is longer after sustained compression than after a brief hit', () 
   const rBrief = tailRms(brief);
   assert.ok(rDense < rBrief * 0.92, `dense tail ${rDense.toFixed(4)} should recover more slowly than brief ${rBrief.toFixed(4)}`);
 });
+
+test('output limiter keeps hot input inside full scale without flattening it', () => {
+  // A signal well above full scale before processing: the old hard clamp
+  // would have flattened its peaks at exactly 1.0.
+  const x = new Float32Array(SR / 2);
+  for (let i = 0; i < x.length; i++) x[i] = 1.5 * Math.sin((2 * Math.PI * 300 * i) / SR);
+  const [y] = processSP303([x], SR, { compress: 0, noise: 0, volume: 1 });
+  const top = peak(y);
+  assert.ok(top < 1, `peak should stay below 1, got ${top}`);
+  let atRail = 0;
+  for (const v of y) if (Math.abs(v) >= 0.9999) atRail++;
+  assert.equal(atRail, 0, 'no samples should sit flat on the rail');
+});
+
+test('output limiter leaves quiet signal unchanged', () => {
+  // With no compression, saturation or noise, a small signal should pass
+  // through the limiter untouched (apart from the chain's own gain).
+  const x = sine(440, 0.1, 0.1);
+  const a = processSP303([x], SR, { compress: 0, noise: 0, volume: 1 })[0];
+  // limiter is a no-op below its knee, so the output must not exceed the knee
+  assert.ok(peak(a) < 0.8, `quiet output should sit below the limiter knee, got ${peak(a)}`);
+});

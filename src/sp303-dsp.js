@@ -5,7 +5,7 @@
 // It is not a model of Roland's circuit or of the SP-303's sample codec.
 //
 // Chain: input gain -> tone shaping (EQ) -> feed-forward compressor
-//        -> soft saturation -> vinyl noise (crackle + hiss) -> output clamp.
+//        -> soft saturation -> vinyl noise (crackle + hiss) -> soft output limiter.
 //
 // Compressor behaviour (both unverified against hardware; see README):
 //  - Transient preservation: the gain's attack is slowed by the Transient
@@ -202,11 +202,31 @@ function addVinylNoise(x, sampleRate, noiseAmt, rng) {
   return x;
 }
 
+// ---------- output limiter ----------
+// Below the knee the signal passes unchanged. Above it, peaks bend smoothly
+// towards full scale instead of being clipped flat, so the output never
+// exceeds +/-1 and the top of a hot signal keeps a rounded shape.
+
+const LIMIT_KNEE = 0.8;
+
+function softLimitSample(v) {
+  const a = Math.abs(v);
+  if (a <= LIMIT_KNEE) return v;
+  const room = 1 - LIMIT_KNEE;
+  const y = LIMIT_KNEE + room * Math.tanh((a - LIMIT_KNEE) / room);
+  return v < 0 ? -y : y;
+}
+
+function softLimit(x) {
+  for (let i = 0; i < x.length; i++) x[i] = softLimitSample(x[i]);
+  return x;
+}
+
 // ---------- public API ----------
 
 /**
  * Process an array of channels (Float32Array or Float64Array, values -1..1).
- * Returns a new array of Float64Array channels, clamped to -1..1.
+ * Returns a new array of Float64Array channels, soft-limited into -1..1.
  */
 export function processSP303(channels, sampleRate, params = {}) {
   const p = { ...DEFAULT_PARAMS, ...params };
@@ -229,10 +249,7 @@ export function processSP303(channels, sampleRate, params = {}) {
   return compressed.map((c) => {
     saturate(c);
     addVinylNoise(c, sampleRate, noiseAmt, rng);
-    for (let i = 0; i < c.length; i++) {
-      if (c[i] > 1) c[i] = 1;
-      else if (c[i] < -1) c[i] = -1;
-    }
+    softLimit(c);
     return c;
   });
 }

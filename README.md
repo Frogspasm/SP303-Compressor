@@ -54,5 +54,6 @@ npm test
 - The compressor's threshold, ratio, and timing are chosen by hand. They are not derived from hardware measurements.
 - **Transient** and **program-dependent release** are modelled from forum and video descriptions, not measured. The Transient slider slows the gain attack, so a hit's first 4–20 ms pass through. Release lengthens after sustained compression, so a dense section recovers more slowly than a brief hit. Neither has been checked against the hardware, since the test recordings contain no drum hits.
 - No dry (unprocessed) reference recordings have been compared sample by sample, so the chain has not been checked against the hardware.
+- **Limiter:** the output stage is a soft limiter (knee at 0.8, tanh above it), not a hard clip. Hot input bends towards full scale instead of flattening at 1.0.
 - **Working rate** (any supported rate): the sample is resampled to this rate before processing, so the effect works at that bandwidth.
 - **Export rate** (44.1 or 48 kHz): the processed audio is resampled to this rate for "Play processed" and the download.
