@@ -60,13 +60,11 @@
         <button id="download" disabled>Download processed WAV</button>
       </div>
       <div class="row">
-        <label for="export-rate">Export rate</label>
-        <select id="export-rate">
-          <option value="44100" selected>44.1 kHz</option>
-          <option value="48000">48 kHz</option>
-        </select>
+        <label for="sample-rate">Sample rate</label>
+        <select id="sample-rate"></select>
         <span></span>
       </div>
+      <p class="note">Sets the rate used for playback of the processed sound and for the download. Lower rates lose content above half the rate.</p>
     </div>
   </main>
   <script type="module" src="./src/app.js"></script>

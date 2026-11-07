@@ -1,14 +1,17 @@
 import { processSP303, DEFAULT_PARAMS } from './sp303-dsp.js';
 import { encodeWav16 } from './wav.js';
-import { resampleChannels } from './resample.js';
+import { resampleChannels, SUPPORTED_RATES } from './resample.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
   file: $('file'), drop: $('drop'), status: $('status'),
   volume: $('volume'), compress: $('compress'), noise: $('noise'),
   playOriginal: $('play-original'), playProcessed: $('play-processed'),
-  stop: $('stop'), download: $('download'),
+  stop: $('stop'), download: $('download'), rate: $('sample-rate'),
 };
+
+// Resampled copy of the processed audio, cached per rate until the next process run.
+let outputCache = null; // { rate, channels }
 
 let ctx = null;
 let source = null;      // AudioBuffer of the loaded file
@@ -39,6 +42,30 @@ function setReady(ready) {
   els.playOriginal.disabled = !ready;
   els.playProcessed.disabled = !ready;
   els.download.disabled = !ready;
+}
+
+function fillRateMenu() {
+  for (const r of SUPPORTED_RATES) {
+    const opt = document.createElement('option');
+    opt.value = String(r);
+    opt.textContent = `${r / 1000} kHz`;
+    if (r === 44100) opt.selected = true;
+    els.rate.appendChild(opt);
+  }
+}
+
+function selectedRate() {
+  return parseInt(els.rate.value, 10);
+}
+
+// Processed audio at the chosen sample rate (what you hear and what you export).
+function outputAudio() {
+  const rate = selectedRate();
+  if (!outputCache || outputCache.rate !== rate || outputCache.src !== processed) {
+    const channels = resampleChannels(processed.channels, processed.sampleRate, rate);
+    outputCache = { rate, src: processed, channels };
+  }
+  return { channels: outputCache.channels, rate };
 }
 
 function runProcess() {
@@ -97,15 +124,14 @@ async function loadFile(file) {
 
 function download() {
   if (!processed) return;
-  const exportRate = parseInt($('export-rate').value, 10);
-  const channels = resampleChannels(processed.channels, processed.sampleRate, exportRate);
-  const wav = encodeWav16(channels, exportRate);
+  const { channels, rate } = outputAudio();
+  const wav = encodeWav16(channels, rate);
   const blob = new Blob([wav], { type: 'audio/wav' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const base = fileName.replace(/\.[^.]+$/, '');
   a.href = url;
-  a.download = `${base}-vinylsim-${exportRate / 1000}k.wav`;
+  a.download = `${base}-vinylsim-${rate / 1000}k.wav`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -142,9 +168,13 @@ els.playOriginal.addEventListener('click', () => {
   playBuffer(channels, source.sampleRate);
 });
 els.playProcessed.addEventListener('click', () => {
-  if (processed) playBuffer(processed.channels, processed.sampleRate);
+  if (!processed) return;
+  const { channels, rate } = outputAudio();
+  playBuffer(channels, rate);
 });
+els.rate.addEventListener('change', () => { if (processed) outputAudio(); });
 els.stop.addEventListener('click', stopPlayback);
 els.download.addEventListener('click', download);
 
+fillRateMenu();
 updateOutputs();
